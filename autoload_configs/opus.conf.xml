@@ -1,19 +1,68 @@
 <configuration name="opus.conf">
     <settings>
+
+        <!-- "use-vbr" setting - set OPUS in VBR mode - consume less bandwidth . VBR is OPUS's native mode -->
         <param name="use-vbr" value="1"/>
+
+        <!-- ""use-dtx" setting -  do not use DTX . perhaps the remote client/user app does not support it -->
+        <param name="use-dtx" value="0"/>
+
+        <!-- "complexity" setting - this is a codec specific setting . we assume you have a powerfull machine to do transcoding and complexity can be 10 -->
         <param name="complexity" value="10"/>
 
+        <!--  "maxaveragebitrate" setting -  this bitrate is chosen so that FEC is present in the payload whenever the Opus codec decides it can add it. There is a threshold bitrate for FEC activation in OPUS : 12400 . Lower than this bitrate , there will be no FEC   -->
+        <param name="maxaveragebitrate" value="18000"/>
+
         <!--
-           maxaveragebitrate: the maximum average codec bitrate (values: 6000 to 510000 in bps) 0 is not considered
-           maxplaybackrate: the maximum codec internal frequency (values: 8000, 12000, 16000, 24000, 48000 in Hz) 0 is not considered
-           This will set the local encoder and instruct the remote encoder trough specific "fmtp" attibute in the SDP.
-
-           Example: if you receive "maxaveragebitrate=20000" from SDP and you have set "maxaveragebitrate=24000" in this configuration
-                    the lowest will prevail in this case "20000" is set on the encoder and the corresponding fmtp attribute will be set
-                    to instruct the remote encoder to do the same.
+            "maxplaybackrate"  setting - sample rate of encoder. this will tell the remote party that it's pointless to send us higher rates, because we will
+            downsample anyway, so better send 8000 to spare us some CPU
         -->
-        <param name="maxaveragebitrate" value="0"/>
-        <param name="maxplaybackrate" value="0"/>
+        <param name="maxplaybackrate" value="8000"/>
 
+        <!--
+            "packet-loss-percent" setting - is the initial packet loss that we pass to the encoder. This value in conjunction with the maxaveragebitrate value will make
+            the codec decide if it will use FEC or not
+        -->
+        <param name="packet-loss-percent" value="10"/>
+
+        <!--
+            "keep-fec-enabled" setting  - will enforce the encoder to use FEC regardless of the maxaveragebitrate supplied to it. In fact it will recalculate  a new bitrate based
+            on the packetloss percentage taken from RTCP arriving to us from the user app if the packet loss is higher than 10%. You might expect that this bitrate would be lower
+            than the maxaveragebitrate, but in reality the actual bitrate will vary with packet loss during the call - but only to keep FEC enabled. If there's no more packet loss
+            during the call then the bitrate will go to the supplied maxaveragebitrate (the one set from remote fmtp or local config file).
+
+        ###
+
+            This works in today's networks. For example a congested WiFi router or core router will drop a 60 bytes packet (40 bytes IP/UDP/RTP header  +  20 bytes voice payload ) as
+            easy as an 70 bytes packet, so if you increase the bitrate with 10 bytes per packet (it's the price to pay of having FEC enabled - but the good side is that only certain
+            packets will contain it ) will not matter that much for that congested router, it will continue to forward some packets and drop some packets in the same manner. It's a
+            packet-loss pattern (many small gaps). The usage of FEC will improve the audio quality because there will be redundant information in the packets eventually arriving at
+            the decoder after the congestion adventure. This is just an example, don't take these values above exactly as they are (60, 70 , 10) . Only 40 bytes for header overhead
+            is a correct value and it's the only fixed value in calculating network bitrate. "maxaveragebitrate"  is an average , and the actual network bandwidth used might be a
+            little bit higher or a little bit smaller, depending on the content being encoded. The voice payload size varies (because Opus is VBR) and so does the FEC payload inside
+            the voice payload.
+
+        ###
+        -->
+        <param name="keep-fec-enabled" value="1"/>
+
+        <!--
+            "use-jb-lookahead" setting  - you must enable  the jitter buffer for FEC decoding to work. This setting has impact on decoding received FEC - it will
+            improve the audio quality greatly under packet loss conditions. We decode incoming FEC by looking in the jitter buffer, checking if we have the next
+            packet (only if the current packet is missing due to packet loss ) and then checking if it has FEC info in it. If it has FEC, then first we decode the
+            FEC and then we decode the main payload. This is n+1 FEC .
+        -->
+        <param name="use-jb-lookahead" value="1"/>
+
+        <!--  Tell the remote party it's okay to send us voice payloads with FEC . If we don't have a jitter buffer activated we will just ignore the voice payloads with FEC, and play only the main part of the voice payload  -->
+        <param name="advertise-useinbandfec" value="1"/>
+
+        <!--
+            From FS 1.6.11 there is another setting called "adjust-bitrate" that you can put in opus.conf.xml - this will attempt to vary the bitrate during the call as well and it will work in all modes. "adjust-bitrate" would
+            work in the whole bitrate range .
+        -->
+        <param name="adjust-bitrate" value="1"/>
+
+        <param name="bitrate-negotiation" value="1"/>
     </settings>
 </configuration>
